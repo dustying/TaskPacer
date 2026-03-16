@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>Task Pacer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── THEMES ── */
+  :root {
+    --bg:      #0f0e0c;
+    --surface: #1c1a17;
+    --border:  #38352f;
+    --text:    #e8e3d8;
+    --muted:   #7a746c;
+    --faint:   #2e2b26;
+    --accent:  #c8b87a;
+    --green:   #5dbe8a;
+    --red:     #e0604a;
+    --face-bg: #151311;
+    --face-stroke: #3a3630;
+    --tick-major: #4a4640;
+    --tick-minor: #2e2b27;
+    --track:   #1e1c19;
+  }
+
+  body.light {
+    --bg:      #f5f2ec;
+    --surface: #eae6de;
+    --border:  #c8c2b6;
+    --text:    #1c1a17;
+    --muted:   #8a8278;
+    --faint:   #dedad2;
+    --accent:  #8a6f30;
+    --green:   #2e8a58;
+    --red:     #c0402c;
+    --face-bg: #faf8f4;
+    --face-stroke: #c8c2b6;
+    --tick-major: #9a9488;
+    --tick-minor: #c8c2b6;
+    --track:   #dedad2;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 16px 80px;
+    transition: background 0.25s, color 0.25s;
+  }
+
+  /* ── HEADER ── */
+  .top-bar {
+    width: 320px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 24px;
+  }
+  h1 {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 1.1rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+  }
+  #theme-toggle {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    padding: 4px 9px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  #theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ── CLOCK ── */
+  #clock-wrap { width: 320px; height: 320px; flex-shrink: 0; }
+  #clock-svg  { width: 100%; height: 100%; overflow: visible; }
+
+  /* ── CURRENT TASK ── */
+  #current-section { margin-top: 22px; width: 320px; }
+  .label {
+    font-size: 0.58rem; color: var(--muted);
+    letter-spacing: 0.22em; text-transform: uppercase; margin-bottom: 5px;
+  }
+  #current-name {
+    font-family: 'Instrument Serif', serif;
+    font-size: 1.7rem; color: var(--text); margin-bottom: 4px; min-height: 2rem;
+    line-height: 1.2;
+  }
+  .current-meta { font-size: 0.68rem; color: var(--accent); display: flex; gap: 16px; min-height: 1rem; }
+  #current-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
+  /* ── BUTTONS ── */
+  button {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem; letter-spacing: 0.12em; padding: 7px 14px;
+    border: 1px solid var(--border); background: transparent; color: var(--text);
+    cursor: pointer; text-transform: uppercase; transition: all 0.15s;
+  }
+  button:hover { background: var(--surface); border-color: var(--accent); color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  button.primary:hover { opacity: 0.85; }
+
+  /* ── TASK LIST ── */
+  #task-list-section { margin-top: 28px; width: 320px; }
+  .list-header {
+    font-size: 0.58rem; color: var(--muted); letter-spacing: 0.22em;
+    text-transform: uppercase; margin-bottom: 8px;
+    display: flex; justify-content: space-between;
+  }
+  .task-row {
+    display: grid;
+    grid-template-columns: 8px 1fr auto auto auto;
+    align-items: center; gap: 8px;
+    padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 0.73rem;
+  }
+  .task-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; transition: background 0.2s; }
+  .task-name-cell { color: var(--text); }
+  .task-dur-cell  { color: var(--muted); font-size: 0.65rem; white-space: nowrap; text-align: right; }
+  .task-delta     { font-size: 0.62rem; white-space: nowrap; min-width: 28px; text-align: right; }
+  .delta-early { color: var(--green); }
+  .delta-late  { color: var(--red); }
+  .task-del {
+    color: var(--border); cursor: pointer; font-size: 1rem; line-height: 1;
+    padding: 0 2px; user-select: none; transition: color 0.1s;
+  }
+  .task-del:hover { color: var(--red); }
+
+  /* ── ADD ROW ── */
+  #add-row {
+    display: grid; grid-template-columns: 1fr 52px;
+    margin-top: 4px; padding: 9px 0;
+    border-bottom: 1px solid var(--border); align-items: center;
+    transition: border-color 0.2s;
+  }
+  #add-row.active { border-color: var(--accent); }
+  #add-name, #add-dur {
+    font-family: 'DM Mono', monospace; font-size: 0.73rem;
+    background: transparent; border: none; color: var(--text); outline: none; padding: 2px 0;
+  }
+  #add-name::placeholder { color: var(--muted); }
+  #add-dur { text-align: right; color: var(--muted); width: 100%; }
+  #add-dur::placeholder { color: var(--border); }
+  .add-hint { margin-top: 7px; font-size: 0.57rem; color: var(--border); letter-spacing: 0.04em; }
+
+  /* ── PACE ── */
+  .pace-row {
+    margin-top: 16px; font-size: 0.65rem; color: var(--muted);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .pace-pill { padding: 2px 8px; font-size: 0.59rem; letter-spacing: 0.08em; border-radius: 2px; }
+  .pace-ahead { background: rgba(93,190,138,0.13); color: var(--green); }
+  .pace-late  { background: rgba(224,96,74,0.13);  color: var(--red); }
+  .pace-on    { background: rgba(200,184,122,0.12); color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <h1>Task Pacer</h1>
+  <button id="theme-toggle" onclick="toggleTheme()">☀ light</button>
+</div>
+
+<div id="clock-wrap">
+  <svg id="clock-svg" viewBox="-170 -170 340 340"></svg>
+</div>
+
+<div id="current-section">
+  <div class="label">current task</div>
+  <div id="current-name">—</div>
+  <div class="current-meta">
+    <span id="current-elapsed"></span>
+    <span id="current-remaining"></span>
+  </div>
+  <div id="current-actions"></div>
+</div>
+
+<div id="task-list-section">
+  <div class="list-header">
+    <span>tasks</span>
+    <span id="total-label"></span>
+  </div>
+  <div id="task-list"></div>
+  <div id="add-row">
+    <input id="add-name" type="text" placeholder="add a task…" autocomplete="off" spellcheck="false">
+    <input id="add-dur"  type="number" placeholder="min" min="1" max="240">
+  </div>
+  <div class="add-hint">tab → minutes → enter &nbsp;·&nbsp; repeat to add more</div>
+  <div class="pace-row" id="pace-row"></div>
+  <button id="copy-btn" onclick="exportTasks()" style="display:none;margin-top:18px;width:100%">copy task list</button>
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────
+let tasks           = [];
+let nextId          = 1;
+let activeIdx       = -1;
+let sessionStartMin = null; // fractional clock-minute (0–60) when session began
+let isLight         = false;
+
+// ── THEME ──────────────────────────────────────────────────
+function toggleTheme() {
+  isLight = !isLight;
+  document.body.classList.toggle('light', isLight);
+  const btn = document.getElementById('theme-toggle');
+  btn.textContent = isLight ? '☾ dark' : '☀ light';
+}
+
+// ── SVG HELPERS ────────────────────────────────────────────
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const svg    = document.getElementById('clock-svg');
+const FACE_R = 100;
+const RING_R = 120;
+const RING_W = 9;       // stroke width of task arcs
+const GAP_MIN = 0.65;   // gap between tasks in clock-minutes; rounded caps fill ~half this visually
+
+function svgEl(tag, attrs) {
+  const e = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  return e;
+}
+
+function minToAngle(m) { return ((m % 60) / 60) * 360 - 90; }
+
+function polarXY(deg, r) {
+  const rad = deg * Math.PI / 180;
+  return [r * Math.cos(rad), r * Math.sin(rad)];
+}
+
+// Draw an arc from startMin, spanning spanMin minutes. Returns SVG path element or null.
+function arc(startMin, spanMin, r, stroke, sw, opacity) {
+  if (spanMin < 0.05) return null;
+  const clamped = Math.min(spanMin, 59.95);
+  const a1 = minToAngle(startMin);
+  const a2 = minToAngle(startMin + clamped);
+  const [x1, y1] = polarXY(a1, r);
+  const [x2, y2] = polarXY(a2, r);
+  const large = clamped > 30 ? 1 : 0;
+  const d = `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
+  const p = svgEl('path', { d, fill:'none', stroke, 'stroke-width': sw, 'stroke-linecap':'round' });
+  if (opacity !== undefined && opacity < 0.999) p.setAttribute('opacity', String(Math.max(0, opacity)));
+  return p;
+}
+
+function lineEl(deg, r0, r1, stroke, sw) {
+  const [x1, y1] = polarXY(deg, r0);
+  const [x2, y2] = polarXY(deg, r1);
+  return svgEl('line', { x1, y1, x2, y2, stroke, 'stroke-width': sw, 'stroke-linecap':'round' });
+}
+
+// Resolve CSS variable to actual color string (needed for SVG fill/stroke)
+function cssVar(name) {
+  return getComputedStyle(document.body).getPropertyValue(name).trim();
+}
+
+// ── CLOCK DRAW ─────────────────────────────────────────────
+function drawClock() {
+  svg.innerHTML = '';
+
+  const now    = new Date();
+  const nowSec = now.getSeconds() + now.getMilliseconds() / 1000;
+  const nowMin = now.getMinutes() + nowSec / 60;
+  const nowHr  = now.getHours() % 12 + nowMin / 60;
+
+  const cFaceBg     = cssVar('--face-bg');
+  const cFaceStroke = cssVar('--face-stroke');
+  const cTickMajor  = cssVar('--tick-major');
+  const cTickMinor  = cssVar('--tick-minor');
+  const cAccent     = cssVar('--accent');
+
+  // Face
+  svg.appendChild(svgEl('circle', { cx:0, cy:0, r: FACE_R, fill: cFaceBg, stroke: cFaceStroke, 'stroke-width':1.5 }));
+
+  // Tick marks
+  for (let i = 0; i < 60; i++) {
+    const isQuarter = i % 15 === 0;
+    const isHour    = i % 5  === 0;
+    const a = (i / 60) * 360 - 90;
+    const outer = FACE_R - 3;
+    const inner = FACE_R - (isQuarter ? 16 : isHour ? 11 : 7);
+    const [ox, oy] = polarXY(a, outer);
+    const [ix, iy] = polarXY(a, inner);
+    svg.appendChild(svgEl('line', {
+      x1:ox, y1:oy, x2:ix, y2:iy,
+      stroke: isHour ? cTickMajor : cTickMinor,
+      'stroke-width': isQuarter ? 1.8 : isHour ? 1.1 : 0.6,
+      'stroke-linecap': 'round'
+    }));
+  }
+
+  // Task arcs — no background ring track; gaps between tasks should be empty
+  if (tasks.length > 0) {
+    if (sessionStartMin !== null) {
+      drawActiveRing(nowMin);
+    } else {
+      drawPreviewRing(nowMin);
+    }
+  }
+
+  // Hands
+  const handColor = isLight ? '#2a2620' : '#ddd8cc';
+  svg.appendChild(lineEl(nowHr / 12 * 360 - 90,  -6,  56, handColor, 3.5));
+  svg.appendChild(lineEl(nowMin / 60 * 360 - 90, -10,  77, handColor, 2));
+  svg.appendChild(lineEl(nowSec / 60 * 360 - 90, -14,  87, cAccent,   1.2));
+  svg.appendChild(svgEl('circle', { cx:0, cy:0, r:3.5, fill: cAccent }));
+  svg.appendChild(svgEl('circle', { cx:0, cy:0, r:1.5, fill: cFaceBg }));
+}
+
+// Build the layout of task segments.
+// Each item: { task, idx, clockStart, clockSpan, drawSpan, opacity }
+//   clockStart — absolute clock-minute where this task begins (arc() wraps via mod 60)
+//   clockSpan  — always the ESTIMATED duration; used to advance the cursor and position future tasks
+//   drawSpan   — clockSpan - GAP_MIN (what's drawn for upcoming/preview tasks)
+// Completed tasks use actualDur to shift future tasks. Active task stays at estimated size;
+// overrun bleeds visually past the gap but does NOT move future tasks until completion.
+function buildLayout(nowMin) {
+  const layout = [];
+  const origin = (sessionStartMin !== null) ? sessionStartMin : nowMin;
+  let cursor = origin;
+
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i];
+
+    // Cursor advances by: actualDur (if done) or estimated dur (active/upcoming)
+    let clockSpan;
+    if (task.completedAt && task.actualDur != null) {
+      clockSpan = task.actualDur;
+    } else {
+      clockSpan = task.dur;
+    }
+
+    const drawSpan = Math.max(0.05, clockSpan - GAP_MIN);
+    layout.push({ task, idx: i, clockStart: cursor, clockSpan, drawSpan, opacity: 1 });
+    cursor += clockSpan + GAP_MIN;
+  }
+
+  // Fade the last upcoming task(s) that overflow the 60-min horizon
+  const horizon = origin + 60;
+  for (const item of layout) {
+    if (item.task.completedAt || item.idx === activeIdx) continue;
+    const segEnd = item.clockStart + item.clockSpan;
+    if (item.clockStart >= horizon) {
+      item.opacity = 0;
+    } else if (segEnd > horizon) {
+      const beyond = segEnd - horizon;
+      item.opacity = Math.max(0, 1 - (beyond / item.clockSpan) * 1.4);
+    }
+  }
+
+  return layout;
+}
+
+function drawPreviewRing(nowMin) {
+  const layout = buildLayout(nowMin);
+  const trackColor = cssVar('--faint');
+  for (const item of layout) {
+    if (item.opacity <= 0.01) continue;
+    const a = arc(item.clockStart, item.drawSpan, RING_R, trackColor, RING_W, item.opacity);
+    if (a) svg.appendChild(a);
+  }
+}
+
+function drawActiveRing(nowMin) {
+  const layout  = buildLayout(nowMin);
+  const cGreen  = cssVar('--green');
+  const cRed    = cssVar('--red');
+  const cAccent = cssVar('--accent');
+  const cFaint  = cssVar('--faint');
+  const cBorder = cssVar('--border');
+
+  for (const item of layout) {
+    const { task, idx, clockStart, clockSpan, drawSpan, opacity } = item;
+
+    if (task.completedAt && task.actualDur != null) {
+      // ── COMPLETED: single solid bar, green or red ──
+      const color = task.actualDur <= task.dur ? cGreen : cRed;
+      const a = arc(clockStart, drawSpan, RING_R, color, RING_W, 1);
+      if (a) svg.appendChild(a);
+
+    } else if (idx === activeIdx) {
+      // ── ACTIVE ──
+      // Background: estimated allocation, fixed size
+      const estDrawSpan = Math.max(0.05, task.dur - GAP_MIN);
+      const bg = arc(clockStart, estDrawSpan, RING_R, cFaint, RING_W, 1);
+      if (bg) svg.appendChild(bg);
+
+      // Progress fill: grows freely. On overrun it bleeds past the estimate into the gap
+      // and into the next task's space — a visual warning that does NOT move future tasks.
+      const elapsed = (Date.now() - task.startedAt) / 60000;
+      if (elapsed > 0.02) {
+        const overrun = elapsed > task.dur;
+        const progressDraw = overrun
+          ? elapsed  // bleeds freely, no cap — red arc grows into next task's territory
+          : Math.min(elapsed, estDrawSpan);
+        const p = arc(clockStart, progressDraw, RING_R, overrun ? cRed : cAccent, RING_W, 1);
+        if (p) svg.appendChild(p);
+      }
+
+    } else {
+      // ── UPCOMING ──
+      if (opacity <= 0.01) continue;
+      const a = arc(clockStart, drawSpan, RING_R, cBorder, RING_W, opacity);
+      if (a) svg.appendChild(a);
+    }
+  }
+}
+
+// ── UI RENDER ──────────────────────────────────────────────
+function renderAll() {
+  renderList();
+  renderCurrent();
+  renderPace();
+  updateCopyBtn();
+}
+
+function renderList() {
+  const list = document.getElementById('task-list');
+  list.innerHTML = '';
+
+  const total = tasks.reduce((a, t) => a + t.dur, 0);
+  document.getElementById('total-label').textContent = total ? `${total} min` : '';
+
+  tasks.forEach((task, i) => {
+    const isDone   = !!task.completedAt;
+    const isActive = i === activeIdx;
+    const isEarly  = isDone && task.actualDur <= task.dur;
+
+    const row = document.createElement('div');
+    row.className = 'task-row';
+
+    const dot = document.createElement('div');
+    dot.className = 'task-dot';
+    dot.style.background = isDone
+      ? (isEarly ? 'var(--green)' : 'var(--red)')
+      : isActive ? 'var(--accent)' : 'var(--faint)';
+
+    const nameCell = document.createElement('div');
+    nameCell.className = 'task-name-cell';
+    nameCell.textContent = task.name;
+    if (!isDone && !isActive) {
+      nameCell.contentEditable = 'true';
+      nameCell.style.cssText = 'outline:none;cursor:text;border-bottom:1px solid transparent;transition:border-color 0.15s';
+      nameCell.addEventListener('focus', () => nameCell.style.borderColor = 'var(--accent)');
+      nameCell.addEventListener('blur', () => {
+        nameCell.style.borderColor = 'transparent';
+        task.name = nameCell.textContent.trim() || task.name;
+        nameCell.textContent = task.name;
+      });
+      nameCell.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); nameCell.blur(); }
+        if (e.key === 'Tab')   { e.preventDefault(); durCell.focus(); selectAll(durCell); }
+      });
+    }
+
+    const durCell = document.createElement('div');
+    durCell.className = 'task-dur-cell';
+    if (isDone) {
+      durCell.textContent = task.actualDur === task.dur ? `${task.dur}m` : `${task.actualDur}m / ${task.dur}m`;
+    } else {
+      durCell.textContent = `${task.dur}m`;
+    }
+    if (!isDone && !isActive) {
+      durCell.contentEditable = 'true';
+      durCell.style.cssText = 'outline:none;cursor:text;text-align:right;border-bottom:1px solid transparent;transition:border-color 0.15s';
+      durCell.addEventListener('focus', () => durCell.style.borderColor = 'var(--accent)');
+      durCell.addEventListener('blur', () => {
+        durCell.style.borderColor = 'transparent';
+        const v = parseInt(durCell.textContent);
+        if (v > 0) task.dur = v;
+        durCell.textContent = `${task.dur}m`;
+        renderAll();
+      });
+      durCell.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); durCell.blur(); }
+        if (e.key === 'Tab')   { e.preventDefault(); durCell.blur(); }
+      });
+    }
+
+    const delta = document.createElement('div');
+    delta.className = 'task-delta';
+    if (isDone) {
+      const d = task.dur - task.actualDur;
+      if      (d > 0) { delta.classList.add('delta-early'); delta.textContent = `−${d}m`; }
+      else if (d < 0) { delta.classList.add('delta-late');  delta.textContent = `+${-d}m`; }
+    } else if (isActive) {
+      delta.style.color = 'var(--accent)';
+      delta.textContent = '▶';
+    }
+
+    const del = document.createElement('span');
+    del.className = 'task-del';
+    del.textContent = '×';
+    del.addEventListener('click', () => {
+      if (i === activeIdx) activeIdx = -1;
+      else if (i < activeIdx) activeIdx--;
+      tasks.splice(i, 1);
+      renderAll();
+    });
+
+    row.append(dot, nameCell, durCell, delta, del);
+    list.appendChild(row);
+  });
+}
+
+function selectAll(el) {
+  const r = document.createRange();
+  r.selectNodeContents(el);
+  const s = window.getSelection();
+  s.removeAllRanges(); s.addRange(r);
+}
+
+function renderCurrent() {
+  const nameEl    = document.getElementById('current-name');
+  const elapsedEl = document.getElementById('current-elapsed');
+  const remainEl  = document.getElementById('current-remaining');
+  const actionsEl = document.getElementById('current-actions');
+  actionsEl.innerHTML = '';
+
+  if (activeIdx >= 0 && tasks[activeIdx]) {
+    nameEl.textContent = tasks[activeIdx].name;
+
+    const doneBtn = document.createElement('button');
+    doneBtn.className = 'primary';
+    doneBtn.textContent = '✓ complete';
+    doneBtn.onclick = completeTask;
+
+    const skipBtn = document.createElement('button');
+    skipBtn.textContent = 'skip';
+    skipBtn.onclick = () => {
+      tasks[activeIdx].completedAt = Date.now();
+      tasks[activeIdx].actualDur = tasks[activeIdx].dur;
+      activeIdx = -1;
+      // auto-start next
+      const nextIdx = tasks.findIndex(t => !t.completedAt && !t.startedAt);
+      if (nextIdx >= 0) startTask(nextIdx);
+      else renderAll();
+    };
+
+    actionsEl.append(doneBtn, skipBtn);
+  } else {
+    const nextIdx = tasks.findIndex(t => !t.completedAt && !t.startedAt);
+    if (nextIdx >= 0) {
+      nameEl.textContent    = tasks[nextIdx].name;
+      elapsedEl.textContent = '';
+      remainEl.textContent  = `${tasks[nextIdx].dur} min estimated`;
+
+      const startBtn = document.createElement('button');
+      startBtn.className = 'primary';
+      startBtn.textContent = '▶ start';
+      startBtn.onclick = () => startTask(nextIdx);
+      actionsEl.appendChild(startBtn);
+    } else {
+      nameEl.textContent    = tasks.length ? 'all done' : '—';
+      elapsedEl.textContent = '';
+      remainEl.textContent  = '';
+    }
+  }
+}
+
+function renderPace() {
+  const el   = document.getElementById('pace-row');
+  const done = tasks.filter(t => t.completedAt && t.actualDur != null);
+  if (!done.length) { el.innerHTML = ''; return; }
+  const delta = done.reduce((a, t) => a + (t.actualDur - t.dur), 0);
+  if (delta < -1)  el.innerHTML = `<span class="pace-pill pace-ahead">ahead ${Math.abs(delta)}m</span> ahead of pace`;
+  else if (delta > 1) el.innerHTML = `<span class="pace-pill pace-late">behind +${delta}m</span> behind pace`;
+  else                el.innerHTML = `<span class="pace-pill pace-on">on pace</span>`;
+}
+
+// ── TASK ACTIONS ───────────────────────────────────────────
+function startTask(i) {
+  if (sessionStartMin === null) {
+    const d = new Date();
+    sessionStartMin = d.getMinutes() + d.getSeconds() / 60;
+  }
+  tasks[i].startedAt = Date.now();
+  activeIdx = i;
+  renderAll();
+}
+
+function completeTask() {
+  if (activeIdx < 0) return;
+  const t = tasks[activeIdx];
+  t.completedAt = Date.now();
+  t.actualDur   = Math.max(1, Math.round((t.completedAt - t.startedAt) / 60000));
+  activeIdx = -1;
+
+  // auto-start next task
+  const nextIdx = tasks.findIndex(task => !task.completedAt && !task.startedAt);
+  if (nextIdx >= 0) {
+    startTask(nextIdx);
+  } else {
+    renderAll();
+  }
+}
+
+// ── ADD TASK (keyboard-first) ──────────────────────────────
+const addNameEl = document.getElementById('add-name');
+const addDurEl  = document.getElementById('add-dur');
+const addRowEl  = document.getElementById('add-row');
+
+addNameEl.addEventListener('input', () => {
+  addRowEl.classList.toggle('active', addNameEl.value.trim().length > 0);
+});
+
+addNameEl.addEventListener('keydown', e => {
+  if (e.key === 'Tab' && addNameEl.value.trim()) {
+    e.preventDefault(); addDurEl.focus(); addDurEl.select(); return;
+  }
+  if (e.key === 'Enter') {
+    const name = addNameEl.value.trim();
+    if (!name) return;
+    e.preventDefault();
+    const dur = parseInt(addDurEl.value);
+    if (dur > 0) commitAdd(name, dur);
+    else { addDurEl.focus(); addDurEl.select(); }
+  }
+});
+
+addDurEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+    e.preventDefault();
+    const name = addNameEl.value.trim();
+    const dur  = parseInt(addDurEl.value);
+    if (name && dur > 0) { commitAdd(name, dur); addNameEl.focus(); }
+    else if (name)       { commitAdd(name, 10);  addNameEl.focus(); }
+  }
+  if (e.key === 'Escape') addNameEl.focus();
+});
+
+// ── IMPORT (paste) ─────────────────────────────────────────
+// Fires when the user pastes into the task name field.
+// If the pasted text contains newlines, treat it as a bulk import.
+addNameEl.addEventListener('paste', e => {
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if (!text.includes('\n')) return; // single line — let normal paste happen
+  e.preventDefault();
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  let added = 0;
+  for (const line of lines) {
+    const parsed = parseLine(line);
+    if (parsed) { commitAdd(parsed.name, parsed.dur); added++; }
+  }
+  if (added > 0) { addNameEl.value = ''; addDurEl.value = ''; addRowEl.classList.remove('active'); }
+});
+
+// Parse a single line: "Task name 15m" → {name, dur}
+// Duration can be the last token in forms: 15, 15m, 15min, 1.5h, 1h30m (approx)
+function parseLine(line) {
+  const durPatterns = [
+    { re: /^(\d+(?:\.\d+)?)\s*h(?:r|rs|our|ours)?$/i,   factor: 60  },  // 1h, 1.5h, 1hr
+    { re: /^(\d+(?:\.\d+)?)\s*m(?:in|ins|inute|inutes)?$/i, factor: 1 },  // 15m, 15min
+    { re: /^(\d+)$/,                                        factor: 1  },  // bare number = minutes
+  ];
+  const tokens = line.trim().split(/\s+/);
+  if (tokens.length < 2) {
+    // single token — try it as a name with no duration, skip
+    return null;
+  }
+  const last = tokens[tokens.length - 1];
+  for (const { re, factor } of durPatterns) {
+    const m = last.match(re);
+    if (m) {
+      const dur = Math.round(parseFloat(m[1]) * factor);
+      if (dur > 0 && dur <= 480) {
+        const name = tokens.slice(0, -1).join(' ');
+        return { name, dur };
+      }
+    }
+  }
+  return null; // no recognizable duration — skip line
+}
+
+// ── EXPORT (copy) ──────────────────────────────────────────
+function exportTasks() {
+  const lines = tasks.map(t => `${t.name} ${t.dur}m`).join('\n');
+  navigator.clipboard.writeText(lines).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'copied ✓';
+    setTimeout(() => { btn.textContent = 'copy task list'; }, 2000);
+  });
+}
+
+// Show copy button whenever there are tasks
+function updateCopyBtn() {
+  document.getElementById('copy-btn').style.display = tasks.length ? 'block' : 'none';
+}
+
+function commitAdd(name, dur) {
+  tasks.push({ id: nextId++, name, dur, startedAt: null, completedAt: null, actualDur: null });
+  addNameEl.value = ''; addDurEl.value = '';
+  addRowEl.classList.remove('active');
+  updateCopyBtn();
+  renderAll();
+}
+
+// ── TICK ───────────────────────────────────────────────────
+function fmt(m) {
+  const a = Math.abs(m);
+  return `${Math.floor(a)}:${String(Math.floor((a % 1) * 60)).padStart(2, '0')}`;
+}
+
+function tick() {
+  drawClock();
+  if (activeIdx >= 0 && tasks[activeIdx]) {
+    const elapsed = (Date.now() - tasks[activeIdx].startedAt) / 60000;
+    const remain  = tasks[activeIdx].dur - elapsed;
+    document.getElementById('current-elapsed').textContent   = `${fmt(elapsed)} elapsed`;
+    document.getElementById('current-remaining').textContent = remain >= 0
+      ? `${fmt(remain)} remaining`
+      : `${fmt(remain)} over`;
+  } else if (activeIdx < 0) {
+    document.getElementById('current-elapsed').textContent  = '';
+    document.getElementById('current-remaining').textContent = '';
+  }
+}
+
+renderAll();
+setInterval(tick, 250);
+tick();
+</script>
+</body>
+</html>
